@@ -46,6 +46,7 @@ const COMPAT_VERSION: u32 = 16;
 const OF_DT_BEGIN_NODE: u32 = 0x00000001;
 const OF_DT_END_NODE: u32 = 0x00000002;
 const OF_DT_PROP: u32 = 0x00000003;
+const OF_DT_NOP: u32 = 0x00000004;
 const OF_DT_END: u32 = 0x00000009;
 
 /// An error describe parsing problems when creating device trees.
@@ -341,11 +342,20 @@ impl Node {
         // finally, parse children
         let mut children = Vec::new();
 
-        while try!(buffer.read_be_u32(pos)) == OF_DT_BEGIN_NODE {
-            let (new_pos, child_node) = try!(Node::load(buffer, pos, off_dt_strings));
-            pos = new_pos;
+        loop {
+            match try!(buffer.read_be_u32(pos)) {
+                OF_DT_BEGIN_NODE => {
+                    let (new_pos, child_node) = try!(Node::load(buffer, pos, off_dt_strings));
+                    pos = new_pos;
 
-            children.push(child_node);
+                    children.push(child_node);
+                },
+                OF_DT_NOP => {
+                    // skip it
+                    pos += 4;
+                },
+                _ => break
+            }
         }
 
         if try!(buffer.read_be_u32(pos)) != OF_DT_END_NODE {
@@ -486,15 +496,16 @@ impl From<SliceReadError> for PropError {
 
 #[cfg(test)]
 mod test {
-    use std::fs;
-    use std::io::{Read, Write};
+    extern crate std;
+    use test::std::fs;
+    use test::std::io::{Read, Write};
 
     use super::*;
 
     #[test]
     fn roundtrip() {
         // read file into memory
-        let buf = include_bytes!("../examples/bcm2709-rpi-2-b.dtb");
+        let buf = include_bytes!("../examples/example.dtb");
         let original_fdt = DeviceTree::load(buf).unwrap();
 
         let dtb = original_fdt.store().unwrap();
