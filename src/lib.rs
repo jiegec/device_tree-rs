@@ -29,12 +29,15 @@
 //!     println!("{:?}", dt);
 //! }
 //! ```
+#![no_std]
+#![feature(alloc)]
 
-extern crate core;
+extern crate alloc;
 
 pub mod util;
 
 use core::str;
+use alloc::prelude::*;
 use util::{align, SliceRead, SliceReadError, VecWrite, VecWriteError};
 
 const MAGIC_NUMBER: u32 = 0xd00dfeed;
@@ -129,38 +132,8 @@ impl From<str::Utf8Error> for DeviceTreeError {
     }
 }
 
-#[cfg(feature = "string-dedup")]
-mod advancedstringtable {
-    use std::collections::HashMap;
-
-    pub struct StringTable {
-        pub buffer: Vec<u8>,
-        index: HashMap<String, u32>,
-    }
-
-    impl StringTable {
-        pub fn new() -> StringTable {
-            StringTable {
-                buffer: Vec::new(),
-                index: HashMap::new(),
-            }
-        }
-
-        pub fn add_string(&mut self, val: &str) -> u32 {
-            if let Some(offset) = self.index.get(val) {
-                return *offset;
-            }
-            let offset = self.buffer.len() as u32;
-            self.buffer.extend(val.bytes());
-            self.buffer.push(0);
-            self.index.insert(val.to_string(), offset);
-            offset
-        }
-    }
-}
-
-#[cfg(not(feature = "string-dedup"))]
 mod stringtable {
+    use alloc::prelude::*;
     pub struct StringTable {
         pub buffer: Vec<u8>,
     }
@@ -179,11 +152,7 @@ mod stringtable {
     }
 }
 
-#[cfg(not(feature = "string-dedup"))]
 use stringtable::StringTable;
-
-#[cfg(feature = "string-dedup")]
-use advancedstringtable::StringTable;
 
 impl DeviceTree {
     //! Load a device tree from a memory buffer.
