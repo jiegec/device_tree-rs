@@ -36,8 +36,8 @@ extern crate alloc;
 
 pub mod util;
 
-use core::str;
 use alloc::prelude::*;
+use core::str;
 use util::{align, SliceRead, SliceReadError, VecWrite, VecWriteError};
 
 const MAGIC_NUMBER: u32 = 0xd00dfeed;
@@ -349,12 +349,12 @@ impl Node {
                     pos = new_pos;
 
                     children.push(child_node);
-                },
+                }
                 OF_DT_NOP => {
                     // skip it
                     pos += 4;
-                },
-                _ => break
+                }
+                _ => break,
             }
         }
 
@@ -505,7 +505,7 @@ mod test {
     #[test]
     fn roundtrip() {
         // read file into memory
-        let buf = include_bytes!("../examples/example.dtb");
+        let buf = include_bytes!("../examples/bcm2709-rpi-2-b.dtb");
         let original_fdt = DeviceTree::load(buf).unwrap();
 
         let dtb = original_fdt.store().unwrap();
