@@ -1,4 +1,4 @@
-use alloc::prelude::*;
+use alloc::vec::Vec;
 pub use core::{convert, fmt, option, result, str};
 
 #[inline]

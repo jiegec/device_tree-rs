@@ -36,7 +36,9 @@ extern crate alloc;
 
 pub mod util;
 
-use alloc::prelude::*;
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::str;
 use util::{align, SliceRead, SliceReadError, VecWrite, VecWriteError};
 
@@ -134,7 +136,7 @@ impl From<str::Utf8Error> for DeviceTreeError {
 }
 
 mod stringtable {
-    use alloc::prelude::*;
+    use alloc::vec::Vec;
     pub struct StringTable {
         pub buffer: Vec<u8>,
     }
