@@ -40,6 +40,7 @@ use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::str;
+use core::slice;
 use util::{align, SliceRead, SliceReadError, VecWrite, VecWriteError};
 
 const MAGIC_NUMBER: u32 = 0xd00dfeed;
@@ -50,6 +51,12 @@ const OF_DT_END_NODE: u32 = 0x00000002;
 const OF_DT_PROP: u32 = 0x00000003;
 const OF_DT_NOP: u32 = 0x00000004;
 const OF_DT_END: u32 = 0x00000009;
+
+#[derive(Debug)]
+struct DtbHeader {
+    magic : u32,
+    size : u32,
+}
 
 /// An error describe parsing problems when creating device trees.
 #[derive(Debug)]
@@ -304,6 +311,22 @@ impl DeviceTree {
 
         Ok(dtb)
     }
+
+    pub fn dtb_query_memory(dtb: usize) -> Option<(usize,usize)> {
+        let header = unsafe{ &*(dtb as *const DtbHeader) };
+        let magic = u32::from_be(header.magic);
+        if magic == 0xd00dfeed {
+            let size = u32::from_be(header.size); 
+            let dtb_data = unsafe { slice::from_raw_parts(dtb as *const u8, size as usize) };
+
+            if let Ok(data) = DeviceTree::load(dtb_data) {
+                if let Some(ret) = Node::query_memory(&data.root) {
+                    return Some(ret);
+                }
+            }
+        }
+        None
+    }
 }
 
 impl Node {
@@ -481,6 +504,23 @@ impl Node {
         let len = structure.len();
         try!(structure.write_be_u32(len, OF_DT_END_NODE));
         Ok(())
+    }
+
+    fn query_memory(data_root: &Node) -> Option<(usize, usize)> {
+        if let Ok(device_type) = data_root.prop_str("device_type") {
+            if device_type == "memory" {
+                if let Some(reg) = data_root.prop_raw("reg") {
+                    return Option::from((reg.as_slice().read_be_u64(0).unwrap() as usize,
+                        reg.as_slice().read_be_u64(8).unwrap() as usize));
+                }
+            }
+        }
+        for child in data_root.children.iter() {
+            if let Some(ret) = Node::query_memory(child) {
+                return Some(ret);
+            }
+        }
+        None
     }
 }
 
