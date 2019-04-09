@@ -225,6 +225,17 @@ impl DeviceTree {
         })
     }
 
+    /// Load and walk a device tree from a memory buffer.
+    /// Action should return when an interested item is found and the tree walking will stop at once
+    pub fn load_and_walk(
+        buffer: &[u8],
+        mut action: impl FnMut(&Node) -> bool,
+    ) -> Result<(bool, DeviceTree), DeviceTreeError> {
+        let device_tree = try!(Self::load(buffer));
+        let found = device_tree.root.walk(&mut action);
+        Ok((found, device_tree))
+    }
+
     pub fn find<'a>(&'a self, path: &str) -> Option<&'a Node> {
         // we only find root nodes on the device tree
         if !path.starts_with('/') {
@@ -307,6 +318,19 @@ impl DeviceTree {
 }
 
 impl Node {
+    pub fn walk(&self, action: &mut impl FnMut(&Node) -> bool) -> bool {
+        if action(self) {
+            return true;
+        }
+
+        for child in self.children.iter() {
+            if child.walk(action) {
+                return true;
+            }
+        }
+        false
+    }
+
     fn load(
         buffer: &[u8],
         start: usize,
@@ -524,5 +548,31 @@ mod test {
         let generated_fdt = DeviceTree::load(buf.as_slice()).unwrap();
 
         assert!(original_fdt == generated_fdt);
+    }
+
+    #[test]
+    fn walk() {
+        // read file into memory
+        let buf = include_bytes!("../examples/bcm2709-rpi-2-b.dtb");
+
+        assert_eq!(
+            (DeviceTree::load_and_walk(buf, |node: &Node| match node.prop_str("device_type") {
+                Ok("cpu") => true,
+                _ => false,
+            }))
+            .unwrap()
+            .0,
+            true
+        );
+
+        assert_eq!(
+            (DeviceTree::load_and_walk(buf, |node: &Node| match node.prop_str("device_type") {
+                Ok("nonexistent") => true,
+                _ => false,
+            }))
+            .unwrap()
+            .0,
+            false
+        );
     }
 }
