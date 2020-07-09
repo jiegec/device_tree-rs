@@ -467,6 +467,16 @@ impl Node {
         Ok(try!(raw.as_slice().read_be_u32(0)))
     }
 
+    pub fn prop_usize(&self, name: &str) -> Result<usize, PropError> {
+        let raw = try!(self.prop_raw(name).ok_or(PropError::NotFound));
+
+        if core::mem::size_of::<usize>() == core::mem::size_of::<u32>() {
+            Ok(try!(raw.as_slice().read_be_u32(0)) as usize)
+        } else {
+            Ok(try!(raw.as_slice().read_be_u64(0)) as usize)
+        }
+    }
+
     pub fn store(
         &self,
         structure: &mut Vec<u8>,
