@@ -39,7 +39,7 @@ pub mod util;
 use alloc::borrow::ToOwned;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::str;
+use core::{slice, str};
 use util::{align, SliceRead, SliceReadError, VecWrite, VecWriteError};
 
 const MAGIC_NUMBER: u32 = 0xd00dfeed;
@@ -158,7 +158,9 @@ mod stringtable {
 use stringtable::StringTable;
 
 impl DeviceTree {
-    //! Load a device tree from a memory buffer.
+    const MIN_HEADER_SIZE: usize = 8;
+
+    /// Load a device tree from a memory buffer.
     pub fn load(buffer: &[u8]) -> Result<DeviceTree, DeviceTreeError> {
         //  0  magic_number: u32,
 
@@ -223,6 +225,17 @@ impl DeviceTree {
             reserved: reserved,
             root: root,
         })
+    }
+
+    /// Load a device tree from a raw pointer. This should be used when the size of the device tree
+    /// is unknown
+    pub fn load_from_raw_pointer(addr: *const u8) -> Result<DeviceTree, DeviceTreeError> {
+        let mut buffer: &[u8] =
+            unsafe { slice::from_raw_parts_mut(addr as *mut u8, Self::MIN_HEADER_SIZE) };
+        let buffer_actual_size = buffer.read_be_u32(4)? as usize;
+        buffer = unsafe { slice::from_raw_parts_mut(addr as *mut u8, buffer_actual_size) };
+
+        return Self::load(buffer);
     }
 
     /// Load and walk a device tree from a memory buffer.
