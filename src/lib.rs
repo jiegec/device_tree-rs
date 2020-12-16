@@ -348,30 +348,30 @@ impl Node {
         off_dt_strings: usize,
     ) -> Result<(usize, Node), DeviceTreeError> {
         // check for DT_BEGIN_NODE
-        if try!(buffer.read_be_u32(start)) != OF_DT_BEGIN_NODE {
+        if buffer.read_be_u32(start)? != OF_DT_BEGIN_NODE {
             return Err(DeviceTreeError::ParseError(start));
         }
 
-        let raw_name = try!(buffer.read_bstring0(start + 4));
+        let raw_name = buffer.read_bstring0(start + 4)?;
 
         // read all the props
         let mut pos = align(start + 4 + raw_name.len() + 1, 4);
 
         let mut props = Vec::new();
 
-        while try!(buffer.read_be_u32(pos)) == OF_DT_PROP {
-            let val_size = try!(buffer.read_be_u32(pos + 4)) as usize;
-            let name_offset = try!(buffer.read_be_u32(pos + 8)) as usize;
+        while buffer.read_be_u32(pos)? == OF_DT_PROP {
+            let val_size = buffer.read_be_u32(pos + 4)? as usize;
+            let name_offset = buffer.read_be_u32(pos + 8)? as usize;
 
             // get value slice
             let val_start = pos + 12;
             let val_end = val_start + val_size;
-            let val = try!(buffer.subslice(val_start, val_end));
+            let val = buffer.subslice(val_start, val_end)?;
 
             // lookup name in strings table
-            let prop_name = try!(buffer.read_bstring0(off_dt_strings + name_offset));
+            let prop_name = buffer.read_bstring0(off_dt_strings + name_offset)?;
 
-            props.push((try!(str::from_utf8(prop_name)).to_owned(), val.to_owned()));
+            props.push((str::from_utf8(prop_name)?.to_owned(), val.to_owned()));
 
             pos = align(val_end, 4);
         }
@@ -380,9 +380,9 @@ impl Node {
         let mut children = Vec::new();
 
         loop {
-            match try!(buffer.read_be_u32(pos)) {
+            match buffer.read_be_u32(pos)? {
                 OF_DT_BEGIN_NODE => {
-                    let (new_pos, child_node) = try!(Node::load(buffer, pos, off_dt_strings));
+                    let (new_pos, child_node) = Node::load(buffer, pos, off_dt_strings)?;
                     pos = new_pos;
 
                     children.push(child_node);
@@ -395,7 +395,7 @@ impl Node {
             }
         }
 
-        if try!(buffer.read_be_u32(pos)) != OF_DT_END_NODE {
+        if buffer.read_be_u32(pos)? != OF_DT_END_NODE {
             return Err(DeviceTreeError::ParseError(pos));
         }
 
@@ -404,7 +404,7 @@ impl Node {
         Ok((
             pos,
             Node {
-                name: try!(str::from_utf8(raw_name)).to_owned(),
+                name: str::from_utf8(raw_name)?.to_owned(),
                 props: props,
                 children: children,
             },
@@ -447,14 +447,14 @@ impl Node {
     }
 
     pub fn prop_str<'a>(&'a self, name: &str) -> Result<&'a str, PropError> {
-        let raw = try!(self.prop_raw(name).ok_or(PropError::NotFound));
+        let raw = self.prop_raw(name).ok_or(PropError::NotFound)?;
 
         let l = raw.len();
         if l < 1 || raw[l - 1] != 0 {
             return Err(PropError::Missing0);
         }
 
-        Ok(try!(str::from_utf8(&raw[..(l - 1)])))
+        Ok(str::from_utf8(&raw[..(l - 1)])?)
     }
 
     pub fn prop_raw<'a>(&'a self, name: &str) -> Option<&'a Vec<u8>> {
@@ -467,24 +467,24 @@ impl Node {
     }
 
     pub fn prop_u64(&self, name: &str) -> Result<u64, PropError> {
-        let raw = try!(self.prop_raw(name).ok_or(PropError::NotFound));
+        let raw = self.prop_raw(name).ok_or(PropError::NotFound)?;
 
-        Ok(try!(raw.as_slice().read_be_u64(0)))
+        Ok(raw.as_slice().read_be_u64(0)?)
     }
 
     pub fn prop_u32(&self, name: &str) -> Result<u32, PropError> {
-        let raw = try!(self.prop_raw(name).ok_or(PropError::NotFound));
+        let raw = self.prop_raw(name).ok_or(PropError::NotFound)?;
 
-        Ok(try!(raw.as_slice().read_be_u32(0)))
+        Ok(raw.as_slice().read_be_u32(0)?)
     }
 
     pub fn prop_usize(&self, name: &str) -> Result<usize, PropError> {
-        let raw = try!(self.prop_raw(name).ok_or(PropError::NotFound));
+        let raw = self.prop_raw(name).ok_or(PropError::NotFound)?;
 
         if core::mem::size_of::<usize>() == core::mem::size_of::<u32>() {
-            Ok(try!(raw.as_slice().read_be_u32(0)) as usize)
+            Ok(raw.as_slice().read_be_u32(0)? as usize)
         } else {
-            Ok(try!(raw.as_slice().read_be_u64(0)) as usize)
+            Ok(raw.as_slice().read_be_u64(0)? as usize)
         }
     }
 
@@ -493,25 +493,25 @@ impl Node {
         structure: &mut Vec<u8>,
         strings: &mut StringTable,
     ) -> Result<(), DeviceTreeError> {
-        try!(structure.pad(4));
+        structure.pad(4)?;
         let len = structure.len();
-        try!(structure.write_be_u32(len, OF_DT_BEGIN_NODE));
+        structure.write_be_u32(len, OF_DT_BEGIN_NODE)?;
 
-        try!(structure.write_bstring0(&self.name));
+        structure.write_bstring0(&self.name)?;
         for prop in self.props.iter() {
-            try!(structure.pad(4));
+            structure.pad(4)?;
             let len = structure.len();
-            try!(structure.write_be_u32(len, OF_DT_PROP));
+            structure.write_be_u32(len, OF_DT_PROP)?;
 
             // Write property value length
-            try!(structure.pad(4));
+            structure.pad(4)?;
             let len = structure.len();
-            try!(structure.write_be_u32(len, prop.1.len() as u32));
+            structure.write_be_u32(len, prop.1.len() as u32)?;
 
             // Write name offset
-            try!(structure.pad(4));
+            structure.pad(4)?;
             let len = structure.len();
-            try!(structure.write_be_u32(len, strings.add_string(&prop.0)));
+            structure.write_be_u32(len, strings.add_string(&prop.0))?;
 
             // Store the property value
             structure.extend_from_slice(&prop.1);
@@ -519,12 +519,12 @@ impl Node {
 
         // Recurse on children
         for child in self.children.iter() {
-            try!(child.store(structure, strings));
+            child.store(structure, strings)?;
         }
 
-        try!(structure.pad(4));
+        structure.pad(4)?;
         let len = structure.len();
-        try!(structure.write_be_u32(len, OF_DT_END_NODE));
+        structure.write_be_u32(len, OF_DT_END_NODE)?;
         Ok(())
     }
 }
