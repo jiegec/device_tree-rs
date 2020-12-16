@@ -30,7 +30,6 @@
 //! }
 //! ```
 #![no_std]
-#![feature(alloc)]
 
 extern crate alloc;
 
@@ -180,34 +179,34 @@ impl DeviceTree {
         // // version 17 fields
         // 36  size_dt_struct: u32,
 
-        if try!(buffer.read_be_u32(0)) != MAGIC_NUMBER {
+        if buffer.read_be_u32(0)? != MAGIC_NUMBER {
             return Err(DeviceTreeError::InvalidMagicNumber);
         }
 
         // check total size
-        if try!(buffer.read_be_u32(4)) as usize != buffer.len() {
+        if buffer.read_be_u32(4)? as usize != buffer.len() {
             return Err(DeviceTreeError::SizeMismatch);
         }
 
         // check version
-        let version = try!(buffer.read_be_u32(20));
+        let version = buffer.read_be_u32(20)?;
         if version != SUPPORTED_VERSION {
             return Err(DeviceTreeError::VersionNotSupported);
         }
 
-        let off_dt_struct = try!(buffer.read_be_u32(8)) as usize;
-        let off_dt_strings = try!(buffer.read_be_u32(12)) as usize;
-        let off_mem_rsvmap = try!(buffer.read_be_u32(16)) as usize;
-        let boot_cpuid_phys = try!(buffer.read_be_u32(28));
+        let off_dt_struct = buffer.read_be_u32(8)? as usize;
+        let off_dt_strings = buffer.read_be_u32(12)? as usize;
+        let off_mem_rsvmap = buffer.read_be_u32(16)? as usize;
+        let boot_cpuid_phys = buffer.read_be_u32(28)?;
 
         // load reserved memory list
         let mut reserved = Vec::new();
         let mut pos = off_mem_rsvmap;
 
         loop {
-            let offset = try!(buffer.read_be_u64(pos));
+            let offset = buffer.read_be_u64(pos)?;
             pos += 8;
-            let size = try!(buffer.read_be_u64(pos));
+            let size = buffer.read_be_u64(pos)?;
             pos += 8;
 
             reserved.push((offset, size));
@@ -217,7 +216,7 @@ impl DeviceTree {
             }
         }
 
-        let (_, root) = try!(Node::load(buffer, off_dt_struct, off_dt_strings));
+        let (_, root) = Node::load(buffer, off_dt_struct, off_dt_strings)?;
 
         Ok(DeviceTree {
             version: version,
@@ -243,7 +242,7 @@ impl DeviceTree {
         buffer: &[u8],
         mut action: impl FnMut(&Node) -> bool,
     ) -> Result<(bool, DeviceTree), DeviceTreeError> {
-        let device_tree = try!(Self::load(buffer));
+        let device_tree = Self::load(buffer)?;
         let found = device_tree.root.walk(&mut action);
         Ok((found, device_tree))
     }
@@ -263,67 +262,67 @@ impl DeviceTree {
 
         // Magic
         let len = dtb.len();
-        try!(dtb.write_be_u32(len, MAGIC_NUMBER));
+        dtb.write_be_u32(len, MAGIC_NUMBER)?;
 
         let size_off = dtb.len();
-        try!(dtb.write_be_u32(size_off, 0)); // Fill in size later
+        dtb.write_be_u32(size_off, 0)?; // Fill in size later
         let off_dt_struct = dtb.len();
-        try!(dtb.write_be_u32(off_dt_struct, 0)); // Fill in off_dt_struct later
+        dtb.write_be_u32(off_dt_struct, 0)?; // Fill in off_dt_struct later
         let off_dt_strings = dtb.len();
-        try!(dtb.write_be_u32(off_dt_strings, 0)); // Fill in off_dt_strings later
+        dtb.write_be_u32(off_dt_strings, 0)?; // Fill in off_dt_strings later
         let off_mem_rsvmap = dtb.len();
-        try!(dtb.write_be_u32(off_mem_rsvmap, 0)); // Fill in off_mem_rsvmap later
+        dtb.write_be_u32(off_mem_rsvmap, 0)?; // Fill in off_mem_rsvmap later
 
         // Version
         let len = dtb.len();
-        try!(dtb.write_be_u32(len, SUPPORTED_VERSION));
+        dtb.write_be_u32(len, SUPPORTED_VERSION)?;
         // Last comp version
         let len = dtb.len();
-        try!(dtb.write_be_u32(len, COMPAT_VERSION));
+        dtb.write_be_u32(len, COMPAT_VERSION)?;
         // boot_cpuid_phys
         let len = dtb.len();
-        try!(dtb.write_be_u32(len, self.boot_cpuid_phys));
+        dtb.write_be_u32(len, self.boot_cpuid_phys)?;
 
         let off_size_strings = dtb.len();
-        try!(dtb.write_be_u32(off_size_strings, 0)); // Fill in size_dt_strings later
+        dtb.write_be_u32(off_size_strings, 0)?; // Fill in size_dt_strings later
         let off_size_struct = dtb.len();
-        try!(dtb.write_be_u32(off_size_struct, 0)); // Fill in size_dt_struct later
+        dtb.write_be_u32(off_size_struct, 0)?; // Fill in size_dt_struct later
 
         // Memory Reservation Block
-        try!(dtb.pad(8));
+        dtb.pad(8)?;
         let len = dtb.len();
-        try!(dtb.write_be_u32(off_mem_rsvmap, len as u32));
+        dtb.write_be_u32(off_mem_rsvmap, len as u32)?;
         for reservation in self.reserved.iter() {
             // address
             let len = dtb.len();
-            try!(dtb.write_be_u64(len, reservation.0));
+            dtb.write_be_u64(len, reservation.0)?;
             // size
             let len = dtb.len();
-            try!(dtb.write_be_u64(len, reservation.1));
+            dtb.write_be_u64(len, reservation.1)?;
         }
 
         // Structure Block
-        try!(dtb.pad(4));
+        dtb.pad(4)?;
         let structure_start = dtb.len();
-        try!(dtb.write_be_u32(off_dt_struct, structure_start as u32));
-        try!(self.root.store(&mut dtb, &mut strings));
+        dtb.write_be_u32(off_dt_struct, structure_start as u32)?;
+        self.root.store(&mut dtb, &mut strings)?;
 
-        try!(dtb.pad(4));
+        dtb.pad(4)?;
         let len = dtb.len();
-        try!(dtb.write_be_u32(len, OF_DT_END));
+        dtb.write_be_u32(len, OF_DT_END)?;
 
         let len = dtb.len();
-        try!(dtb.write_be_u32(off_size_struct, (len - structure_start) as u32));
-        try!(dtb.write_be_u32(off_size_strings, strings.buffer.len() as u32));
+        dtb.write_be_u32(off_size_struct, (len - structure_start) as u32)?;
+        dtb.write_be_u32(off_size_strings, strings.buffer.len() as u32)?;
 
         // Strings Block
-        try!(dtb.pad(4));
+        dtb.pad(4)?;
         let len = dtb.len();
-        try!(dtb.write_be_u32(off_dt_strings, len as u32));
+        dtb.write_be_u32(off_dt_strings, len as u32)?;
         dtb.extend_from_slice(&strings.buffer);
 
         let len = dtb.len();
-        try!(dtb.write_be_u32(size_off, len as u32));
+        dtb.write_be_u32(size_off, len as u32)?;
 
         Ok(dtb)
     }
